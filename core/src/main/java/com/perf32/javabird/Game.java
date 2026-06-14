@@ -6,16 +6,24 @@ import java.util.ArrayList;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator.FreeTypeFontParameter;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 
 /** {@link com.badlogic.gdx.ApplicationListener} implementation shared by all platforms. */
-public class Game extends ApplicationAdapter {
+public class Game extends ApplicationAdapter implements IRestart{
     private SpriteBatch batch;
     private FitViewport viewport;
+    private OrthographicCamera uiCamera;
 
     private Bird bird;
     private ArrayList<PipePair> pipes = new ArrayList<PipePair>();
@@ -23,29 +31,51 @@ public class Game extends ApplicationAdapter {
     private Rectangle2D.Float floor;
     private Rectangle2D.Float ceiling;
 
+    private Label scoreLabel;
     private float score;
+    private FreeTypeFontGenerator generator;
+    private BitmapFont font;
+
+    private GameOverScreen gameOverScreen;
 
     @Override
     public void create() {
         batch = new SpriteBatch();
         viewport = new FitViewport(8, 8 * (9f / 16.0f));
+        uiCamera = new OrthographicCamera();
+        uiCamera.setToOrtho(false, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+
         bird = new Bird();
         bird.create(this, 1.0f, 0.5f);
 
         floor = new Rectangle2D.Float(0,-1, Float.MAX_VALUE,1);
         ceiling = new Rectangle2D.Float(0,viewport.getWorldHeight(), Float.MAX_VALUE,1);
         createPipePairs();
+
+        generator = new FreeTypeFontGenerator(Gdx.files.internal("Roboto-Regular.ttf"));
+        FreeTypeFontParameter parameters = new FreeTypeFontParameter();
+        parameters.size = 24;
+        font = generator.generateFont(parameters);
+
+        Label.LabelStyle scoreStyle = new Label.LabelStyle();
+        scoreStyle.font = font;
+        scoreStyle.fontColor = Color.WHITE;
+        scoreLabel = new Label("Score: " + score, scoreStyle);
+
+        updateFont();
     }
 
     public void increaseScore(){
         score++;
-        System.out.println("New score " + score);
+        scoreLabel.setText("Score: " + score);
     }
 
     public void onDeath(){
-
+        gameOverScreen = new GameOverScreen(this);
+        gameOverScreen.onClicked = this;
     }
     public void restart(){
+        if(gameOverScreen != null)gameOverScreen = null;
         disposePipePairs();
         createPipePairs();
         bird.reset();
@@ -60,6 +90,10 @@ public class Game extends ApplicationAdapter {
     @Override
     public void resize(int width, int height){
         viewport.update(width, height, true);
+        uiCamera.setToOrtho(false, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+        updateFont();
+    }
+    private void updateFont(){
     }
     @Override
     public void render() {
@@ -96,13 +130,20 @@ public class Game extends ApplicationAdapter {
             pipe.draw(batch);
         }
         bird.draw(batch);
+        if(gameOverScreen != null)gameOverScreen.draw(batch);
+        batch.end();
 
+        batch.setProjectionMatrix(uiCamera.combined);
+        batch.begin();
+        scoreLabel.draw(batch, 1);
         batch.end();
     }
     @Override
     public void dispose() {
         bird.dispose();
         batch.dispose();
+        generator.dispose();
+        if(gameOverScreen != null)gameOverScreen = null;
         disposePipePairs();
     }
     private void disposePipePairs(){
